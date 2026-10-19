@@ -83,6 +83,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 <script>
 const $=s=>document.querySelector(s);
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+// Pegá acá la dirección que te da Google al implementar el script (termina en /exec)
+const ENDPOINT='https://script.google.com/macros/s/AKfycbwU8ByIGFZvcZmdGZL0y6bDVfk2C4qVHjNjZ1ZFAEFCgkuT-hS0DgPBlW3MNMAK27zr/exec';
 const TOTAL=2400;
 const rooms=[
 {n:'La sala de reuniones maldita',e:'🪑',
@@ -175,14 +177,12 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 function begin(){const v=$('#team').value.trim();if(!v){$('#tmsg').textContent='Escribí el nombre de tu equipo para empezar.';return}team=v;start()}
 async function sendResult(win){
   const s=st;
-  const rec={equipo:team,tiempo:win?TOTAL-s.t:TOTAL,escaparon:win,salas:win?rooms.length:s.i,pistas:s.h,errores:s.e,fecha:new Date().toISOString()};
+  const rec={equipo:team,tiempo:win?TOTAL-s.t:TOTAL,escaparon:win,salas:win?rooms.length:s.i,pistas:s.h,errores:s.e};
   try{
-    const db=await claude.use('db');
-    if(!db)throw 0;
-    await db.collection('resultados').add(rec);
-    const q=await db.collection('resultados').get();
-    s.rank=q.docs.map(d=>d.data()).filter(r=>r.escaparon).sort((a,b)=>a.tiempo-b.tiempo).slice(0,10);
+    if(!ENDPOINT||ENDPOINT.startsWith('PEGAR'))throw 0;
+    await fetch(ENDPOINT,{method:'POST',mode:'no-cors',body:JSON.stringify(rec)});
     s.sent='ok';
+    try{const r=await fetch(ENDPOINT);s.rank=await r.json()}catch(x){s.rank=[]}
   }catch(x){s.sent='fail'}
   if(st===s&&(s.screen==='win'||s.screen==='lose'))render();
 }
@@ -205,4 +205,5 @@ render();
 </script>
 </body>
 </html>
+
 
