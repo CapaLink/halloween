@@ -61,6 +61,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .glow{animation:glow .9s infinite alternate}
 @keyframes rise{from{opacity:0;transform:scale(.92)}}
 @keyframes glow{to{filter:drop-shadow(0 0 18px #7bd88f)}}
+.hud{position:sticky;top:calc(env(safe-area-inset-top,0px) + 54px);z-index:4;background:var(--ink)}
+.hud[hidden]{display:none}
+#scare small,#okscr small{font-size:clamp(1.4rem,5.5vw,2.2rem);font-weight:700;color:var(--bone);margin-top:14px}
+.reveal{font-size:1.35rem}
+.rank{width:100%;border-collapse:collapse;font-family:"Special Elite",monospace;margin:8px 0 16px}
+.rank td{padding:6px 8px;border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -105,6 +111,7 @@ const rooms=[
  q:'Ingresá el código de 4 dígitos.',
  type:'text',ans:['9173'],hint:'Leé los sellos naranjas de derecha a izquierda.',seal:''}
 ];
+let team='';
 let st={screen:'intro',i:0,seals:[],t:TOTAL,solved:false,timer:null};
 
 function fmt(t){return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')}
@@ -116,25 +123,25 @@ function hud(){
   $('#seals').innerHTML=[0,1,2,3].map(k=>'<div class="seal'+(st.seals[k]?' on':'')+'">'+(st.seals[k]||'?')+'</div>').join('');
 }
 function start(){
-  st={screen:'room',i:0,seals:[],t:TOTAL,solved:false,timer:null};
+  st={screen:'room',i:0,seals:[],t:TOTAL,solved:false,timer:null,h:0,e:0};
   clearInterval(st.timer);
   st.timer=setInterval(()=>{st.t--;if(st.t<=0){st.t=0;end(false)}hud()},1000);
   render();
 }
-function end(win){clearInterval(st.timer);st.screen=win?'win':'lose';render()}
+function end(win){clearInterval(st.timer);st.screen=win?'win':'lose';st.sent='pending';sendResult(win);render()}
 function render(){
   const s=$('#stage');
   if(st.screen==='intro'){
-    s.innerHTML='<h1>La Oficina Embrujada</h1><p class="story" style="margin-top:14px">Es viernes de Halloween y el equipo se quedó trabajando hasta tarde. De repente se apagan las luces, las puertas se traban y aparece un mensaje en la pantalla:</p><div class="paper"><p>“Soy el fantasma del último empleado que nunca pudo tomarse vacaciones. Si quieren salir, completen mi formulario de licencia. Pero está maldito.”</p></div><p>Tienen <b>40 minutos</b> para resolver 5 salas y escapar antes de que amanezca el lunes. Cada pista cuesta 1 minuto y cada error, 30 segundos.</p><div class="row"><button onclick="start()">Entrar a la oficina</button></div>';
+    s.innerHTML='<h1>La Oficina Embrujada</h1><p class="story" style="margin-top:14px">Es viernes de Halloween y el equipo se quedó trabajando hasta tarde. De repente se apagan las luces, las puertas se traban y aparece un mensaje en la pantalla:</p><div class="paper"><p>“Soy el fantasma del último empleado que nunca pudo tomarse vacaciones. Si quieren salir, completen mi formulario de licencia. Pero está maldito.”</p></div><p>Tienen <b>40 minutos</b> para resolver 5 salas y escapar antes de que amanezca el lunes. Cada pista cuesta 1 minuto y cada error, 30 segundos.</p><p class="q">Nombre del equipo</p><input type="text" id="team" maxlength="30" autocomplete="off" aria-label="Nombre del equipo" placeholder="Ej.: Los Sobrevivientes" onkeydown="if(event.key===\'Enter\')begin()"><div class="msg bad" id="tmsg"></div><div class="row"><button onclick="begin()">Entrar a la oficina</button></div>';
     hud();return;
   }
   if(st.screen==='win'){
     const used=TOTAL-st.t;
-    s.innerHTML='<div class="cert"><p class="big">🎃</p><h2>¡Escaparon!</h2><p>Certificado de Sobreviviente de la Oficina Embrujada</p><p>Tiempo: <b>'+fmt(used)+'</b></p><p class="story">El fantasma por fin se tomó vacaciones. Ahora sí, a disfrutar el fin de semana.</p></div><div class="row"><button class="ghost" onclick="start()">Jugar de nuevo</button></div>';
+    s.innerHTML='<div class="cert"><p class="big">🎃</p><h2>¡Escaparon!</h2><p>Equipo <b>'+esc(team)+'</b></p><p>Certificado de Sobreviviente de la Oficina Embrujada</p><p>Tiempo: <b>'+fmt(used)+'</b></p><p class="story">El fantasma por fin se tomó vacaciones. Ahora sí, a disfrutar el fin de semana.</p></div>'+status()+'<div class="row"><button class="ghost" onclick="start()">Jugar de nuevo</button></div>';
     hud();return;
   }
   if(st.screen==='lose'){
-    s.innerHTML='<div class="cert"><p class="big">💀</p><h2>Amaneció el lunes</h2><p>Se acabó el tiempo y el fantasma les asignó tareas pendientes para toda la semana.</p></div><div class="row"><button onclick="start()">Volver a intentarlo</button></div>';
+    s.innerHTML='<div class="cert"><p class="big">💀</p><h2>Amaneció el lunes</h2><p>Se acabó el tiempo y el fantasma les asignó tareas pendientes para toda la semana.</p></div>'+status()+'<div class="row"><button onclick="start()">Volver a intentarlo</button></div>';
     hud();return;
   }
   const r=rooms[st.i];
@@ -147,11 +154,11 @@ function render(){
   const a=$('#ans');if(a)a.focus();
 }
 function msg(t,c){const m=$('#msg');m.textContent=t;m.className='msg '+(c||'');if(c==='bad'){m.classList.remove('shake');void m.offsetWidth;m.classList.add('shake')}}
-function hint(){if(st.solved)return;st.t=Math.max(1,st.t-60);hud();msg('Pista: '+rooms[st.i].hint,'hint')}
+function hint(){if(st.solved)return;st.h++;st.t=Math.max(1,st.t-60);hud();msg('Pista: '+rooms[st.i].hint,'hint')}
 function check(k){
   const r=rooms[st.i];
   const ok=r.type==='choice'?k===r.ans:r.ans.includes(norm($('#ans').value));
-  if(!ok){st.t=Math.max(1,st.t-30);hud();scare();msg('Incorrecto. Probá de nuevo.','bad');return}
+  if(!ok){st.e++;st.t=Math.max(1,st.t-30);hud();scare();msg('Incorrecto. Probá de nuevo.','bad');return}
   if(st.i===rooms.length-1){okScreen('');end(true);return}
   st.solved=true;st.seals[st.i]=r.seal;hud();
   okScreen(r.seal);msg('¡Correcto!','good');
@@ -163,6 +170,27 @@ function scare(){
   const e=$('#scare');$('#scareTxt').textContent=T[Math.floor(Math.random()*T.length)];e.classList.add('on');
   try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(90,c.currentTime);o.frequency.exponentialRampToValueAtTime(40,c.currentTime+.6);g.gain.setValueAtTime(.15,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.7);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.7)}catch(x){}
   clearTimeout(scare.t);scare.t=setTimeout(()=>e.classList.remove('on'),1800);
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function begin(){const v=$('#team').value.trim();if(!v){$('#tmsg').textContent='Escribí el nombre de tu equipo para empezar.';return}team=v;start()}
+async function sendResult(win){
+  const s=st;
+  const rec={equipo:team,tiempo:win?TOTAL-s.t:TOTAL,escaparon:win,salas:win?rooms.length:s.i,pistas:s.h,errores:s.e,fecha:new Date().toISOString()};
+  try{
+    const db=await claude.use('db');
+    if(!db)throw 0;
+    await db.collection('resultados').add(rec);
+    const q=await db.collection('resultados').get();
+    s.rank=q.docs.map(d=>d.data()).filter(r=>r.escaparon).sort((a,b)=>a.tiempo-b.tiempo).slice(0,10);
+    s.sent='ok';
+  }catch(x){s.sent='fail'}
+  if(st===s&&(s.screen==='win'||s.screen==='lose'))render();
+}
+function status(){
+  if(st.sent==='fail')return '<p class="msg bad">No se pudo enviar el resultado automáticamente. Avisale a quien organiza el juego: equipo '+esc(team)+', tiempo '+fmt(TOTAL-st.t)+'.</p>';
+  if(st.sent!=='ok')return '<p class="story">Enviando resultado…</p>';
+  const rows=(st.rank||[]).map((r,k)=>'<tr><td>'+(k+1)+'</td><td>'+esc(r.equipo)+'</td><td>'+fmt(r.tiempo)+'</td></tr>').join('');
+  return '<p class="msg good">Resultado enviado.</p>'+(rows?'<h2>Ranking</h2><table class="rank">'+rows+'</table>':'');
 }
 function okScreen(seal){
   const T=['EL FANTASMA RETROCEDE','LA PUERTA CRUJE Y SE ABRE','ESA ERA LA SALIDA','EL LUNES TODAVÍA ESPERA'];
@@ -177,3 +205,4 @@ render();
 </script>
 </body>
 </html>
+
